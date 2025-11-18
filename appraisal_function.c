@@ -1,4 +1,130 @@
 #include "appraisal_head.h"
+#include <ctype.h> // For isdigit
+
+int MAX_EMPLOYEES_GLOBAL; // Defined here
+
+// Dynamically allocated heap for top performers
+RankEntry *heap = NULL;
+static int heapSize = 0;
+
+// Function to get a valid rating between 0 and 5 (float)
+float get_valid_rating() {
+    float score;
+    char input_buffer[100];
+    int valid_input;
+
+    do {
+        printf("Enter Score (0-5): ");
+        if (fgets(input_buffer, sizeof(input_buffer), stdin) != NULL) {
+            // Remove newline character if present
+            input_buffer[strcspn(input_buffer, "\n")] = 0;
+
+            // Check if input is empty
+            if (strlen(input_buffer) == 0) {
+                printf("Error: Input cannot be empty. Please enter a number between 0 and 5.\n");
+                valid_input = 0;
+                continue;
+            }
+
+            // Check if input contains non-digit characters (except for a single decimal point)
+            int decimal_count = 0;
+            int non_digit_found = 0;
+            for (int i = 0; input_buffer[i] != '\0'; i++) {
+                if (!isdigit(input_buffer[i])) {
+                    if (input_buffer[i] == '.' && decimal_count == 0) {
+                        decimal_count++;
+                    } else {
+                        non_digit_found = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (non_digit_found) {
+                printf("Error: Invalid input. Please enter a numeric value between 0 and 5.\n");
+                valid_input = 0;
+                continue;
+            }
+
+            // Attempt to convert to float
+            if (sscanf(input_buffer, "%f", &score) == 1) {
+                if (score >= 0.0 && score <= 5.0) {
+                    valid_input = 1;
+                } else {
+                    printf("Error: Rating must be between 0 and 5. Please try again.\n");
+                    valid_input = 0;
+                }
+            } else {
+                printf("Error: Invalid input. Please enter a numeric value between 0 and 5.\n");
+                valid_input = 0;
+            }
+        } else {
+            printf("Error reading input. Please try again.\n");
+            valid_input = 0;
+            // Clear stdin buffer in case of error
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+        }
+    } while (!valid_input);
+    return score;
+}
+
+// Function to get a positive integer
+int get_positive_integer(const char *prompt) {
+    int value;
+    char input_buffer[100];
+    int valid_input;
+
+    do {
+        printf("%s", prompt);
+        if (fgets(input_buffer, sizeof(input_buffer), stdin) != NULL) {
+            // Remove newline character if present
+            input_buffer[strcspn(input_buffer, "\n")] = 0;
+
+            // Check if input is empty
+            if (strlen(input_buffer) == 0) {
+                printf("Error: Input cannot be empty. Please enter a positive integer.\n");
+                valid_input = 0;
+                continue;
+            }
+
+            // Check if input contains non-digit characters
+            int non_digit_found = 0;
+            for (int i = 0; input_buffer[i] != '\0'; i++) {
+                if (!isdigit(input_buffer[i])) {
+                    non_digit_found = 1;
+                    break;
+                }
+            }
+
+            if (non_digit_found) {
+                printf("Error: Invalid input. Please enter a positive integer.\n");
+                valid_input = 0;
+                continue;
+            }
+
+            // Attempt to convert to integer
+            if (sscanf(input_buffer, "%d", &value) == 1) {
+                if (value > 0) {
+                    valid_input = 1;
+                } else {
+                    printf("Error: Value must be a positive integer. Please try again.\n");
+                    valid_input = 0;
+                }
+            } else {
+                printf("Error: Invalid input. Please enter a positive integer.\n");
+                valid_input = 0;
+            }
+        } else {
+            printf("Error reading input. Please try again.\n");
+            valid_input = 0;
+            // Clear stdin buffer in case of error
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+        }
+    } while (!valid_input);
+    return value;
+}
 
 // ---------- BST FUNCTIONS ----------
 static Employee* create_node(int id, char name[], char dept[]) {
@@ -68,9 +194,6 @@ int dequeue(Queue *q, AppraisalReq *req) {
 }
 
 // ---------- HEAP FOR TOP PERFORMERS ----------
-static RankEntry heap[MAX_EMP];
-static int heapSize = 0;
-
 static void heap_swap(int i, int j) {
     RankEntry t = heap[i];
     heap[i] = heap[j];
@@ -109,12 +232,16 @@ void heap_insert(int id, char name[], float score) {
         heapify_down(i);
         return;
     }
-
-    heap[heapSize].id = id;
-    strcpy(heap[heapSize].name, name);
-    heap[heapSize].score = score;
-    heapify_up(heapSize);
-    heapSize++;
+    
+    if (heapSize < MAX_EMPLOYEES_GLOBAL) { // Check against global max employees
+        heap[heapSize].id = id;
+        strcpy(heap[heapSize].name, name);
+        heap[heapSize].score = score;
+        heapify_up(heapSize);
+        heapSize++;
+    } else {
+        printf("Heap is full. Cannot add more top performers.\n");
+    }
 }
 
 void display_top_performers(int k) {
@@ -124,15 +251,21 @@ void display_top_performers(int k) {
     }
     if (k > heapSize) k = heapSize;
 
-    RankEntry temp[MAX_EMP];
+    // Create a temporary array for sorting, size based on MAX_EMPLOYEES_GLOBAL
+    RankEntry *temp = (RankEntry*)malloc(sizeof(RankEntry) * MAX_EMPLOYEES_GLOBAL);
+    if (temp == NULL) {
+        printf("Memory allocation failed for temporary heap display.\n");
+        return;
+    }
     int ts = heapSize;
-    memcpy(temp, heap, sizeof(heap));
+    memcpy(temp, heap, sizeof(RankEntry) * heapSize); // Copy only active elements
 
-    for (int i = ts/2 - 1; i >= 0; i--) {
+    // Build max-heap from temporary array
+    for (int i = ts / 2 - 1; i >= 0; i--) {
         int l, r, largest, idx = i;
         while (1) {
-            l = 2*idx + 1;
-            r = 2*idx + 2;
+            l = 2 * idx + 1;
+            r = 2 * idx + 2;
             largest = idx;
             if (l < ts && temp[l].score > temp[largest].score) largest = l;
             if (r < ts && temp[r].score > temp[largest].score) largest = r;
@@ -145,12 +278,12 @@ void display_top_performers(int k) {
     for (int rank = 1; rank <= k; rank++) {
         RankEntry top = temp[0];
         printf("%d) %s (ID:%d) - Avg:%.2f\n", rank, top.name, top.id, top.score);
-        temp[0] = temp[ts-1];
+        temp[0] = temp[ts - 1];
         ts--;
 
         int idx = 0;
         while (1) {
-            int l = 2*idx + 1, r = 2*idx + 2, largest = idx;
+            int l = 2 * idx + 1, r = 2 * idx + 2, largest = idx;
             if (l < ts && temp[l].score > temp[largest].score) largest = l;
             if (r < ts && temp[r].score > temp[largest].score) largest = r;
             if (largest == idx) break;
@@ -158,6 +291,7 @@ void display_top_performers(int k) {
             idx = largest;
         }
     }
+    free(temp); // Free the temporary array
 }
 
 // ---------- PROCESS APPRAISAL ----------
@@ -184,6 +318,16 @@ void process_appraisal(Queue *q, Employee *root) {
 
     printf("Processed appraisal for %s (ID:%d) | New Avg: %.2f | Reviews: %d\n",
            e->name, e->id, e->avg_score, e->reviews);
+}
+
+
+
+void display_employee_ids(Employee *root) {
+    if (!root) return;
+
+    display_employee_ids(root->left);
+    printf("%d ", root->id);
+    display_employee_ids(root->right);
 }
 
 // ---------- MENU ----------
