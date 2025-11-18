@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_EMP 50
+extern int MAX_EMPLOYEES_GLOBAL; // Declared in appraisal_function.c
+
 #define NAME_LEN 50
 #define DEPT_LEN 30
 
@@ -53,4 +54,10 @@ void process_appraisal(Queue *q, Employee *root);
 void heap_insert(int id, char name[], float score);
 void display_top_performers(int k);
 
+void display_employee_ids(Employee *root);
+
 void print_menu();
+
+// New input validation functions
+float get_valid_rating();
+int get_positive_integer(const char *prompt);
